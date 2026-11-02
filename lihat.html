@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Lihat Data - SAKA BERJAYA</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Lihat Data</h1>
+    <div class="user-info">
+      <a href="dashboard.html">← Dashboard</a>
+      <span id="userEmail">-</span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="form-group">
+      <div>
+        <label>Kategori:</label>
+        <select id="kategori"></select>
+      </div>
+      <div>
+        <label>Tahun:</label>
+        <select id="tahun"></select>
+      </div>
+      <button id="btnLoad">👁️ Tampilkan</button>
+      <button id="btnExport" class="btn-secondary">📥 Export CSV</button>
+    </div>
+
+    <div id="loading" class="loading" style="display:none;">Memuat...</div>
+
+    <table id="tabelLihat" style="display:none;">
+      <thead>
+        <tr>
+          <th style="width: 80px;">Kode</th>
+          <th>Indikator</th>
+          <th style="width: 100px;">Satuan</th>
+          <th style="width: 120px;">Nilai</th>
+          <th style="width: 100px;">Delta</th>
+          <th style="width: 100px;">Nilai Thn Lalu</th>
+          <th style="width: 160px;">Terakhir Update</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div id="summary" class="status-info" style="display:none;"></div>
+  </main>
+
+  <script type="module">
+    import { db } from "./js/firebase-config.js";
+    import { ref, get } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { showToast, formatTanggal } from "./js/ui-helper.js";
+    import "./js/auth-guard.js";
+
+    const selKategori = document.getElementById("kategori");
+    const selTahun = document.getElementById("tahun");
+    const tabel = document.getElementById("tabelLihat");
+    const tbody = tabel.querySelector("tbody");
+    const loading = document.getElementById("loading");
+    const summary = document.getElementById("summary");
+
+    let currentData = [];
+
+    // Load kategori
+    const katSnap = await get(ref(db, "kategori"));
+    const katObj = katSnap.val() || {};
+    const katArr = Object.entries(katObj).map(([id, val]) => ({ id, ...val }));
+    katArr.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+
+    katArr.forEach(kat => {
+      if (kat.aktif !== false) {
+        const opt = document.createElement("option");
+        opt.value = kat.id;
+        opt.textContent = kat.nama;
+        selKategori.appendChild(opt);
+      }
+    });
+
+    // Load tahun
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear + 1; y >= currentYear - 5; y--) {
+      const opt = document.createElement("option");
+      opt.value = y;
+      opt.textContent = y;
+      if (y === currentYear) opt.selected = true;
+      selTahun.appendChild(opt);
+    }
+
+    document.getElementById("btnLoad").onclick = async () => {
+      const kategori = selKategori.value;
+      const tahun = parseInt(selTahun.value);
+      const tahunLalu = tahun - 1;
+
+      loading.style.display = "block";
+      tabel.style.display = "none";
+      summary.style.display = "none";
+      tbody.innerHTML = "";
+      currentData = [];
+
+      try {
+        const [indSnap, dataNowSnap, dataPrevSnap] = await Promise.all([
+          get(ref(db, `indikator/${kategori}`)),
+          get(ref(db, `data/${kategori}/${tahun}`)),
+          get(ref(db, `data/${kategori}/${tahunLalu}`))
+        ]);
+
+        const indObj = indSnap.val() || {};
+        const indikators = Object.entries(indObj).map(([id, val]) => ({ id, ...val }));
+        indikators.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+
+        if (indikators.length === 0) {
+          loading.style.display = "none";
+          showToast("Belum ada indikator", "warning");
+          return;
+        }
+
+        const dataNowObj = dataNowSnap.val() || {};
+        const dataPrevObj = dataPrevSnap.val() || {};
+        const hasPrevYear = Object.keys(dataPrevObj).length > 0;
+
+        let totalNilai = 0;
+        let totalDelta = 0;
+
+        indikators.forEach(ind => {
+          const hasNow = dataNowObj[ind.id] !== undefined;
+          const hasPrev = dataPrevObj[ind.id] !== undefined;
+
+          const nilaiNow = hasNow ? (dataNowObj[ind.id].nilai ?? 0) : null;
+          const nilaiPrev = hasPrev ? (dataPrevObj[ind.id].nilai ?? 0) : null;
+          const updatedAt = hasNow ? dataNowObj[ind.id].updatedAt : null;
+
+          // Hitung delta: hanya jika kedua tahun ada
+          let delta = 0;
+          let deltaStr = "-";
+          let deltaClass = "";
+          if (hasNow && hasPrev) {
+            delta = nilaiNow - nilaiPrev;
+            deltaStr = (delta > 0 ? "+" : "") + delta;
+            deltaClass = delta > 0 ? "text-green" : delta < 0 ? "text-red" : "";
+            totalDelta += delta;
+          }
+
+          if (typeof nilaiNow === "number") totalNilai += nilaiNow;
+
+          currentData.push({
+            kode: ind.kode,
+            nama: ind.nama,
+            satuan: ind.satuan,
+            nilai: nilaiNow ?? "-",
+            nilaiPrev: nilaiPrev ?? "-",
+            delta: deltaStr,
+            updatedAt: updatedAt
+          });
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><strong>${ind.kode}</strong></td>
+            <td>${ind.nama}</td>
+            <td>${ind.satuan}</td>
+            <td class="text-right"><strong>${nilaiNow ?? "-"}</strong></td>
+            <td class="text-right ${deltaClass}">${deltaStr}</td>
+            <td class="text-right muted">${nilaiPrev ?? "-"}</td>
+            <td class="muted">${formatTanggal(updatedAt)}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        loading.style.display = "none";
+        tabel.style.display = "table";
+        summary.className = "status-info status-success";
+        summary.innerHTML = `
+          📊 <b>${indikators.length}</b> indikator —
+          Total nilai: <b>${totalNilai.toLocaleString('id-ID')}</b> —
+          Total delta: <b>${totalDelta > 0 ? '+' : ''}${totalDelta.toLocaleString('id-ID')}</b>
+          ${hasPrevYear ? `(dibanding ${tahunLalu})` : `(tahun ${tahunLalu} tidak ada)`}
+        `;
+        summary.style.display = "block";
+
+      } catch (e) {
+        loading.style.display = "none";
+        console.error(e);
+        showToast("Gagal: " + e.message, "error");
+      }
+    };
+
+    document.getElementById("btnExport").onclick = () => {
+      if (currentData.length === 0) {
+        showToast("Tampilkan data dulu", "warning");
+        return;
+      }
+
+      const kategori = selKategori.options[selKategori.selectedIndex].text;
+      const tahun = selTahun.value;
+
+      let csv = `Kategori,${kategori}\nTahun,${tahun}\n\n`;
+      csv += "Kode,Indikator,Satuan,Nilai,Delta,Nilai Tahun Lalu,Terakhir Update\n";
+      currentData.forEach(d => {
+        csv += `"${d.kode}","${d.nama}","${d.satuan}",${d.nilai},${d.delta},${d.nilaiPrev},"${formatTanggal(d.updatedAt)}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `saka-berjaya_${kategori}_${tahun}.csv`;
+      link.click();
+
+      showToast("✅ CSV berhasil diunduh", "success");
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kelola Menu Lainnya - SAKA BERJAYA</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Kelola Menu Lainnya</h1>
+    <div class="user-info">
+      <a href="dashboard.html">← Dashboard</a>
+      <span id="userEmail">-</span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="status-info status-success" style="margin-bottom: 16px;">
+      🔗 Kelola link/menu tambahan (mis: DTSEN, Portal OKU Selatan, BPS). Menu ini akan tampil di aplikasi Android pada kategori <b>Lainnya</b>.
+    </div>
+
+    <div class="form-group">
+      <div style="flex: 1;">
+        <label>Cari (nama / deskripsi / URL)</label>
+        <input type="text" id="searchInput" placeholder="Ketik untuk mencari...">
+      </div>
+      <button id="btnTambah" style="background: #4CAF50;">➕ Tambah Menu</button>
+      <button id="btnRefresh" class="btn-secondary">🔄 Refresh</button>
+    </div>
+
+    <div class="status-info" style="background: #E3F2FD; color: #1976D2;">
+      <b id="totalCount">0</b> menu terdaftar
+    </div>
+
+    <div id="loading" class="loading" style="display: none;">Memuat...</div>
+
+    <table id="tabelMenu" style="display: none;">
+      <thead>
+        <tr>
+          <th style="width: 50px;">No</th>
+          <th style="width: 60px;">Urutan</th>
+          <th>Nama Menu</th>
+          <th>URL</th>
+          <th style="width: 80px;">Status</th>
+          <th style="width: 120px;">Aksi</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div id="emptyState" style="display: none; text-align: center; padding: 48px; color: #757575;">
+      <p style="font-size: 48px;">🔗</p>
+      <p>Belum ada menu terdaftar</p>
+      <p style="font-size: 12px;">Klik <b>Tambah Menu</b> untuk mulai</p>
+    </div>
+  </main>
+
+  <!-- MODAL -->
+  <div id="modalMenu" class="modal-overlay" style="display: none;">
+    <div class="modal-box" style="max-width: 500px;">
+      <h3 id="modalTitle">Tambah Menu</h3>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">Nama Menu *</label>
+        <input type="text" id="fNama" placeholder="DTSEN" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">Deskripsi</label>
+        <textarea id="fDeskripsi" rows="2" placeholder="Data Terpadu Sosial Ekonomi Nasional" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">URL *</label>
+        <input type="url" id="fUrl" placeholder="https://dtsen.dukcapil.kemendagri.go.id" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <div style="flex: 1;">
+          <label style="font-size: 13px; font-weight: 600;">Icon (nama file drawable)</label>
+          <input type="text" id="fIcon" placeholder="ic_dtsen" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+        </div>
+        <div style="flex: 1;">
+          <label style="font-size: 13px; font-weight: 600;">Urutan</label>
+          <input type="number" id="fUrutan" value="1" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+          <input type="checkbox" id="fAktif" checked> Aktif (tampil di aplikasi)
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeModalMenu()">Batal</button>
+        <button class="btn-confirm" id="btnSimpanMenu" style="background: #4CAF50;">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { db } from "./js/firebase-config.js";
+    import { ref, get, set, remove, update } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { showToast, confirmDialog } from "./js/ui-helper.js";
+    import "./js/auth-guard.js";
+
+    let allMenu = [];
+    let currentEditId = null;
+
+    async function loadMenu() {
+      document.getElementById("loading").style.display = "block";
+      document.getElementById("tabelMenu").style.display = "none";
+      document.getElementById("emptyState").style.display = "none";
+
+      try {
+        const snapshot = await get(ref(db, "menu_lainnya"));
+        const obj = snapshot.val() || {};
+
+        allMenu = Object.entries(obj).map(([id, val]) => ({ id, ...val }));
+        allMenu.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("totalCount").textContent = allMenu.length;
+
+        renderTable();
+      } catch (e) {
+        console.error(e);
+        document.getElementById("loading").style.display = "none";
+        showToast("Gagal memuat: " + e.message, "error");
+      }
+    }
+
+    function renderTable() {
+      const keyword = document.getElementById("searchInput").value.toLowerCase().trim();
+      const tbody = document.querySelector("#tabelMenu tbody");
+      const tabel = document.getElementById("tabelMenu");
+      const emptyState = document.getElementById("emptyState");
+
+      const filtered = allMenu.filter(m => {
+        if (!keyword) return true;
+        return (m.nama || "").toLowerCase().includes(keyword) ||
+               (m.deskripsi || "").toLowerCase().includes(keyword) ||
+               (m.url || "").toLowerCase().includes(keyword);
+      });
+
+      tbody.innerHTML = "";
+
+      if (filtered.length === 0) {
+        tabel.style.display = "none";
+        emptyState.style.display = "block";
+        return;
+      }
+
+      tabel.style.display = "table";
+      emptyState.style.display = "none";
+
+      filtered.forEach((m, idx) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${idx + 1}</td>
+          <td style="text-align: center; font-weight: bold;">${m.urutan || 0}</td>
+          <td>
+            <b>${escapeHtml(m.nama || "-")}</b>
+            ${m.deskripsi ? `<br><span style="font-size: 11px; color: #757575;">${escapeHtml(m.deskripsi)}</span>` : ""}
+          </td>
+          <td style="font-size: 12px;">
+            <a href="${escapeHtml(m.url)}" target="_blank" style="color: #1976D2;">
+              ${escapeHtml((m.url || "").substring(0, 50))}${(m.url || "").length > 50 ? "..." : ""}
+            </a>
+          </td>
+          <td>
+            <span class="badge ${m.aktif !== false ? 'badge-success' : 'badge-danger'}">
+              ${m.aktif !== false ? 'Aktif' : 'Nonaktif'}
+            </span>
+          </td>
+          <td>
+            <button class="btn-save btn-edit" data-id="${m.id}" title="Edit">✏️</button>
+            <button class="btn-danger btn-del" data-id="${m.id}" data-nama="${escapeHtml(m.nama)}" title="Hapus">🗑️</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      tbody.querySelectorAll(".btn-edit").forEach(btn => {
+        btn.onclick = () => editMenu(btn.dataset.id);
+      });
+
+      tbody.querySelectorAll(".btn-del").forEach(btn => {
+        btn.onclick = async () => {
+          const id = btn.dataset.id;
+          const nama = btn.dataset.nama;
+          const ok = await confirmDialog(`Hapus menu "<b>${nama}</b>"?`, "Konfirmasi Hapus");
+          if (!ok) return;
+
+          try {
+            await remove(ref(db, `menu_lainnya/${id}`));
+            showToast(`"${nama}" berhasil dihapus`, "success");
+            loadMenu();
+          } catch (e) {
+            showToast("Gagal hapus: " + e.message, "error");
+          }
+        };
+      });
+    }
+
+    function openModalMenu(isEdit, data = null) {
+      document.getElementById("modalMenu").style.display = "flex";
+      document.getElementById("modalTitle").textContent = isEdit ? "Edit Menu" : "Tambah Menu";
+
+      if (isEdit && data) {
+        document.getElementById("fNama").value = data.nama || "";
+        document.getElementById("fDeskripsi").value = data.deskripsi || "";
+        document.getElementById("fUrl").value = data.url || "";
+        document.getElementById("fIcon").value = data.icon || "";
+        document.getElementById("fUrutan").value = data.urutan || 1;
+        document.getElementById("fAktif").checked = data.aktif !== false;
+        currentEditId = data.id;
+      } else {
+        document.getElementById("fNama").value = "";
+        document.getElementById("fDeskripsi").value = "";
+        document.getElementById("fUrl").value = "";
+        document.getElementById("fIcon").value = "";
+        document.getElementById("fUrutan").value = (allMenu.length + 1);
+        document.getElementById("fAktif").checked = true;
+        currentEditId = null;
+      }
+    }
+
+    window.closeModalMenu = () => {
+      document.getElementById("modalMenu").style.display = "none";
+    };
+
+    function editMenu(id) {
+      const data = allMenu.find(m => m.id === id);
+      if (!data) return;
+      openModalMenu(true, data);
+    }
+
+    document.getElementById("btnSimpanMenu").onclick = async () => {
+      const nama = document.getElementById("fNama").value.trim();
+      const deskripsi = document.getElementById("fDeskripsi").value.trim();
+      const url = document.getElementById("fUrl").value.trim();
+      const icon = document.getElementById("fIcon").value.trim();
+      const urutan = parseInt(document.getElementById("fUrutan").value) || 0;
+      const aktif = document.getElementById("fAktif").checked;
+
+      if (!nama || !url) {
+        showToast("Isi Nama dan URL", "warning");
+        return;
+      }
+
+      const data = { nama, deskripsi, url, icon, urutan, aktif };
+
+      try {
+        if (currentEditId) {
+          await update(ref(db, `menu_lainnya/${currentEditId}`), data);
+          showToast(`"${nama}" diperbarui`, "success");
+        } else {
+          const newId = "menu_" + Date.now();
+          await set(ref(db, `menu_lainnya/${newId}`), data);
+          showToast(`"${nama}" ditambahkan`, "success");
+        }
+        closeModalMenu();
+        loadMenu();
+      } catch (e) {
+        showToast("Gagal simpan: " + e.message, "error");
+      }
+    };
+
+    document.getElementById("btnTambah").onclick = () => openModalMenu(false);
+    document.getElementById("btnRefresh").onclick = () => loadMenu();
+    document.getElementById("searchInput").addEventListener("input", renderTable);
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    loadMenu();
+  </script>
+</body>
+</html>

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kelola Pariwisata - SAKA BERJAYA</title>
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- SheetJS untuk baca/tulis Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Kelola Pariwisata</h1>
+    <div class="user-info">
+      <a href="dashboard.html">← Dashboard</a>
+      <span id="userEmail">-</span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- INFO -->
+    <div class="status-info status-success" style="margin-bottom: 16px;">
+      📍 Kelola data objek wisata OKU Selatan. Data ini akan tampil di aplikasi Android pada menu <b>Pariwisata</b>.
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="form-group">
+      <div style="flex: 1;">
+        <label>Cari (nama / kategori / alamat)</label>
+        <input type="text" id="searchInput" placeholder="Ketik untuk mencari...">
+      </div>
+      <button id="btnTambah" style="background: #4CAF50;">➕ Tambah Wisata</button>
+      <button id="btnUpload" style="background: #FF9800;">📤 Upload Excel</button>
+      <button id="btnDownloadTemplate" style="background: #2196F3;">📥 Download Template</button>
+      <button id="btnRefresh" class="btn-secondary">🔄 Refresh</button>
+    </div>
+
+    <!-- INPUT FILE (hidden) -->
+    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+
+    <!-- INFO JUMLAH -->
+    <div class="status-info" style="background: #E3F2FD; color: #1976D2;">
+      <b id="totalCount">0</b> objek wisata terdaftar
+    </div>
+
+    <!-- LOADING -->
+    <div id="loading" class="loading" style="display: none;">Memuat...</div>
+
+    <!-- TABEL -->
+    <table id="tabelWisata" style="display: none;">
+      <thead>
+        <tr>
+          <th style="width: 50px;">No</th>
+          <th>Nama</th>
+          <th style="width: 120px;">Kategori</th>
+          <th>Alamat</th>
+          <th style="width: 140px;">Koordinat</th>
+          <th style="width: 120px;">Aksi</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div id="emptyState" style="display: none; text-align: center; padding: 48px; color: #757575;">
+      <p style="font-size: 48px;">🏞️</p>
+      <p>Belum ada data wisata</p>
+      <p style="font-size: 12px;">Klik <b>Tambah Wisata</b> atau <b>Upload Excel</b> untuk menambahkan data</p>
+    </div>
+  </main>
+
+  <!-- ================================================ -->
+  <!-- MODAL: FORM TAMBAH/EDIT WISATA                   -->
+  <!-- ================================================ -->
+  <div id="modalWisata" class="modal-overlay" style="display: none;">
+    <div class="modal-box" style="max-width: 500px; max-height: 90vh; overflow-y: auto;">
+      <h3 id="modalTitle">Tambah Wisata</h3>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">Nama Wisata *</label>
+        <input type="text" id="fNama" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">Kategori *</label>
+        <input type="text" id="fKategori" list="kategoriList" placeholder="Wisata Alam" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+        <datalist id="kategoriList"></datalist>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">Alamat *</label>
+        <textarea id="fAlamat" rows="2" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <div style="flex: 1;">
+          <label style="font-size: 13px; font-weight: 600;">Latitude *</label>
+          <input type="number" step="any" id="fLat" placeholder="-4.8567" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+        </div>
+        <div style="flex: 1;">
+          <label style="font-size: 13px; font-weight: 600;">Longitude *</label>
+          <input type="number" step="any" id="fLng" placeholder="103.9182" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+        </div>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">Deskripsi</label>
+        <textarea id="fDeskripsi" rows="3" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 13px; font-weight: 600;">URL Foto (opsional)</label>
+        <input type="url" id="fFoto" placeholder="https://..." style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeModalWisata()">Batal</button>
+        <button class="btn-confirm" id="btnSimpanWisata" style="background: #4CAF50;">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================ -->
+  <!-- SCRIPT                                            -->
+  <!-- ================================================ -->
+  <script type="module">
+    import { db } from "./js/firebase-config.js";
+    import { ref, get, set, remove, update } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { showToast, confirmDialog } from "./js/ui-helper.js";
+    import "./js/auth-guard.js";
+
+    // ================================
+    // STATE
+    // ================================
+    let allWisata = [];
+    let currentEditId = null;
+
+    // ================================
+    // LOAD DATA
+    // ================================
+    async function loadWisata() {
+      document.getElementById("loading").style.display = "block";
+      document.getElementById("tabelWisata").style.display = "none";
+      document.getElementById("emptyState").style.display = "none";
+
+      try {
+        const snapshot = await get(ref(db, "pariwisata"));
+        const obj = snapshot.val() || {};
+
+        allWisata = Object.entries(obj).map(([id, val]) => ({ id, ...val }));
+        allWisata.sort((a, b) => (a.nama || "").localeCompare(b.nama || ""));
+
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("totalCount").textContent = allWisata.length;
+
+        // Isi datalist kategori
+        const kategoriSet = new Set();
+        allWisata.forEach(w => { if (w.kategori) kategoriSet.add(w.kategori); });
+        const datalist = document.getElementById("kategoriList");
+        datalist.innerHTML = "";
+        kategoriSet.forEach(k => {
+          const opt = document.createElement("option");
+          opt.value = k;
+          datalist.appendChild(opt);
+        });
+
+        renderTable();
+      } catch (e) {
+        console.error(e);
+        document.getElementById("loading").style.display = "none";
+        showToast("Gagal memuat: " + e.message, "error");
+      }
+    }
+
+    // ================================
+    // RENDER TABEL
+    // ================================
+    function renderTable() {
+      const keyword = document.getElementById("searchInput").value.toLowerCase().trim();
+      const tbody = document.querySelector("#tabelWisata tbody");
+      const tabel = document.getElementById("tabelWisata");
+      const emptyState = document.getElementById("emptyState");
+
+      const filtered = allWisata.filter(w => {
+        if (!keyword) return true;
+        return (w.nama || "").toLowerCase().includes(keyword) ||
+               (w.kategori || "").toLowerCase().includes(keyword) ||
+               (w.alamat || "").toLowerCase().includes(keyword);
+      });
+
+      tbody.innerHTML = "";
+
+      if (filtered.length === 0) {
+        tabel.style.display = "none";
+        emptyState.style.display = "block";
+        return;
+      }
+
+      tabel.style.display = "table";
+      emptyState.style.display = "none";
+
+      filtered.forEach((w, idx) => {
+        const tr = document.createElement("tr");
+        const lat = w.latitude != null ? Number(w.latitude).toFixed(4) : "-";
+        const lng = w.longitude != null ? Number(w.longitude).toFixed(4) : "-";
+
+        tr.innerHTML = `
+          <td>${idx + 1}</td>
+          <td>
+            <b>${escapeHtml(w.nama || "-")}</b>
+            ${w.deskripsi ? `<br><span style="font-size:11px;color:#757575;">${escapeHtml(w.deskripsi.substring(0, 80))}...</span>` : ""}
+          </td>
+          <td><span class="badge">${escapeHtml(w.kategori || "Umum")}</span></td>
+          <td style="font-size: 12px;">${escapeHtml(w.alamat || "-")}</td>
+          <td style="font-size: 11px; font-family: monospace;">${lat}, ${lng}</td>
+          <td>
+            <button class="btn-save btn-edit" data-id="${w.id}" title="Edit">✏️</button>
+            <button class="btn-danger btn-del" data-id="${w.id}" data-nama="${escapeHtml(w.nama)}" title="Hapus">🗑️</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Bind tombol edit
+      tbody.querySelectorAll(".btn-edit").forEach(btn => {
+        btn.onclick = () => editWisata(btn.dataset.id);
+      });
+
+      // Bind tombol hapus
+      tbody.querySelectorAll(".btn-del").forEach(btn => {
+        btn.onclick = async () => {
+          const id = btn.dataset.id;
+          const nama = btn.dataset.nama;
+          const ok = await confirmDialog(`Hapus wisata "<b>${nama}</b>"?`, "Konfirmasi Hapus");
+          if (!ok) return;
+
+          try {
+            await remove(ref(db, `pariwisata/${id}`));
+            showToast(`"${nama}" berhasil dihapus`, "success");
+            loadWisata();
+          } catch (e) {
+            showToast("Gagal hapus: " + e.message, "error");
+          }
+        };
+      });
+    }
+
+    // ================================
+    // MODAL TAMBAH/EDIT
+    // ================================
+    function openModalWisata(isEdit, data = null) {
+      document.getElementById("modalWisata").style.display = "flex";
+      document.getElementById("modalTitle").textContent = isEdit ? "Edit Wisata" : "Tambah Wisata";
+
+      if (isEdit && data) {
+        document.getElementById("fNama").value = data.nama || "";
+        document.getElementById("fKategori").value = data.kategori || "";
+        document.getElementById("fAlamat").value = data.alamat || "";
+        document.getElementById("fLat").value = data.latitude || "";
+        document.getElementById("fLng").value = data.longitude || "";
+        document.getElementById("fDeskripsi").value = data.deskripsi || "";
+        document.getElementById("fFoto").value = data.foto || "";
+        currentEditId = data.id;
+      } else {
+        document.getElementById("fNama").value = "";
+        document.getElementById("fKategori").value = "";
+        document.getElementById("fAlamat").value = "";
+        document.getElementById("fLat").value = "";
+        document.getElementById("fLng").value = "";
+        document.getElementById("fDeskripsi").value = "";
+        document.getElementById("fFoto").value = "";
+        currentEditId = null;
+      }
+    }
+
+    window.closeModalWisata = () => {
+      document.getElementById("modalWisata").style.display = "none";
+    };
+
+    function editWisata(id) {
+      const data = allWisata.find(w => w.id === id);
+      if (!data) return;
+      openModalWisata(true, data);
+    }
+
+    // Simpan
+    document.getElementById("btnSimpanWisata").onclick = async () => {
+      const nama = document.getElementById("fNama").value.trim();
+      const kategori = document.getElementById("fKategori").value.trim();
+      const alamat = document.getElementById("fAlamat").value.trim();
+      const lat = parseFloat(document.getElementById("fLat").value);
+      const lng = parseFloat(document.getElementById("fLng").value);
+      const deskripsi = document.getElementById("fDeskripsi").value.trim();
+      const foto = document.getElementById("fFoto").value.trim();
+
+      if (!nama || !kategori || !alamat) {
+        showToast("Isi Nama, Kategori, dan Alamat", "warning");
+        return;
+      }
+      if (isNaN(lat) || isNaN(lng)) {
+        showToast("Latitude & Longitude harus angka", "warning");
+        return;
+      }
+
+      const data = {
+        nama, kategori, alamat,
+        latitude: lat,
+        longitude: lng,
+        deskripsi,
+        foto
+      };
+
+      try {
+        if (currentEditId) {
+          await update(ref(db, `pariwisata/${currentEditId}`), data);
+          showToast(`"${nama}" diperbarui`, "success");
+        } else {
+          const newId = "wisata_" + Date.now();
+          await set(ref(db, `pariwisata/${newId}`), data);
+          showToast(`"${nama}" ditambahkan`, "success");
+        }
+        closeModalWisata();
+        loadWisata();
+      } catch (e) {
+        showToast("Gagal simpan: " + e.message, "error");
+      }
+    };
+
+    // ================================
+    // DOWNLOAD TEMPLATE EXCEL
+    // ================================
+    document.getElementById("btnDownloadTemplate").onclick = () => {
+      // Data template
+      const template = [
+        ["nama", "kategori", "alamat", "latitude", "longitude", "deskripsi", "foto"],
+        ["Danau Ranau", "Wisata Alam", "Kec. Banding Agung, OKU Selatan", -4.8567, 103.9182, "Danau terbesar kedua di Sumatera", ""],
+        ["Air Terjun Subik", "Wisata Alam", "Kec. Warkuk Ranau Selatan", -4.8123, 103.9456, "Air terjun 30 meter", ""],
+        ["Rumah Adat Ranau", "Wisata Budaya", "Kec. Banding Agung", -4.8500, 103.9200, "Rumah adat suku Ranau", ""]
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(template);
+
+      // Set lebar kolom
+      ws['!cols'] = [
+        { wch: 25 }, // nama
+        { wch: 20 }, // kategori
+        { wch: 40 }, // alamat
+        { wch: 12 }, // latitude
+        { wch: 12 }, // longitude
+        { wch: 50 }, // deskripsi
+        { wch: 30 }  // foto
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Template Pariwisata");
+
+      XLSX.writeFile(wb, "template_pariwisata_okuselatan.xlsx");
+      showToast("Template berhasil diunduh", "success");
+    };
+
+    // ================================
+    // UPLOAD EXCEL
+    // ================================
+    document.getElementById("btnUpload").onclick = () => {
+      document.getElementById("fileInput").click();
+    };
+
+    document.getElementById("fileInput").onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      document.getElementById("loading").style.display = "block";
+      document.getElementById("loading").textContent = "Membaca file Excel...";
+
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const workbook = XLSX.read(data, { type: "array" });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(firstSheet);
+
+          if (rows.length === 0) {
+            showToast("File Excel kosong", "warning");
+            document.getElementById("loading").style.display = "none";
+            return;
+          }
+
+          document.getElementById("loading").textContent = `Memproses ${rows.length} baris...`;
+
+          const ok = await confirmDialog(
+            `Akan mengimpor <b>${rows.length}</b> objek wisata.<br><br>
+             Data yang sudah ada dengan nama sama akan ditimpa.<br><br>
+             Lanjutkan?`,
+            "Konfirmasi Import"
+          );
+
+          if (!ok) {
+            document.getElementById("loading").style.display = "none";
+            document.getElementById("fileInput").value = "";
+            return;
+          }
+
+          let success = 0;
+          let failed = 0;
+
+          for (const row of rows) {
+            try {
+              const nama = String(row.nama || "").trim();
+              if (!nama) { failed++; continue; }
+
+              const data = {
+                nama: nama,
+                kategori: String(row.kategori || "Umum").trim(),
+                alamat: String(row.alamat || "").trim(),
+                latitude: parseFloat(row.latitude) || 0,
+                longitude: parseFloat(row.longitude) || 0,
+                deskripsi: String(row.deskripsi || "").trim(),
+                foto: String(row.foto || "").trim()
+              };
+
+              // Cek apakah sudah ada wisata dengan nama sama
+              const existing = allWisata.find(w =>
+                (w.nama || "").toLowerCase() === nama.toLowerCase());
+
+              if (existing) {
+                // Update
+                await update(ref(db, `pariwisata/${existing.id}`), data);
+              } else {
+                // Insert baru
+                const newId = "wisata_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+                await set(ref(db, `pariwisata/${newId}`), data);
+              }
+              success++;
+            } catch (err) {
+              console.error("Gagal import baris:", row, err);
+              failed++;
+            }
+          }
+
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("fileInput").value = "";
+
+          showToast(
+            `Import selesai: ${success} berhasil, ${failed} gagal`,
+            failed > 0 ? "warning" : "success"
+          );
+          loadWisata();
+
+        } catch (err) {
+          console.error(err);
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("fileInput").value = "";
+          showToast("Gagal baca file: " + err.message, "error");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    };
+
+    // ================================
+    // EVENT LISTENER
+    // ================================
+    document.getElementById("btnTambah").onclick = () => openModalWisata(false);
+    document.getElementById("btnRefresh").onclick = () => loadWisata();
+    document.getElementById("searchInput").addEventListener("input", renderTable);
+
+    // ================================
+    // HELPER
+    // ================================
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    // ================================
+    // INIT
+    // ================================
+    loadWisata();
+  </script>
+</body>
+</html>

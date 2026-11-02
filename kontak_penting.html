@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kontak Penting - SAKA BERJAYA</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Kelola Kontak Penting</h1>
+    <div class="user-info">
+      <a href="dashboard.html">← Dashboard</a>
+      <span id="userEmail">-</span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="status-info status-success" style="margin-bottom: 16px;">
+      📞 Kelola kontak penting (nomor darurat, alamat, website, dll) yang tampil di <b>Beranda Android</b>.
+    </div>
+
+    <div class="status-info" style="background: #FFF3E0; color: #E65100;">
+      💡 <b>Tips:</b> Field "Nomor/URL" bisa berupa nomor telepon (<code>112</code>) atau URL website (<code>https://...</code>).
+    </div>
+
+    <div class="form-group">
+      <button id="btnTambah" style="background: #4CAF50;">➕ Tambah Kontak</button>
+      <button id="btnRefresh" class="btn-secondary">🔄 Refresh</button>
+      <button id="btnSeed" style="background: #FF9800;">🌱 Isi Data Awal (Darurat, Bupati, Web)</button>
+    </div>
+
+    <div class="status-info" style="background: #E3F2FD; color: #1976D2;">
+      <b id="totalCount">0</b> kontak terdaftar
+    </div>
+
+    <div id="loading" class="loading" style="display: none;">Memuat...</div>
+
+    <div id="containerKontak" class="kategori-list"></div>
+
+    <div id="emptyState" style="display: none; text-align: center; padding: 48px; color: #757575;">
+      <p style="font-size: 48px;">📞</p>
+      <p>Belum ada kontak penting</p>
+      <p style="font-size: 12px;">Klik <b>Tambah Kontak</b> atau <b>Isi Data Awal</b></p>
+    </div>
+  </main>
+
+  <!-- MODAL -->
+  <div id="modalKontak" class="modal-overlay" style="display: none;">
+    <div class="modal-box" style="max-width: 500px;">
+      <h3 id="modalTitle">Tambah Kontak</h3>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">Nama Kontak *</label>
+        <input type="text" id="fNama" placeholder="Darurat"
+               style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">Nomor / URL *</label>
+        <input type="text" id="fNomor" placeholder="112 atau https://okuselatan.go.id"
+               style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">Icon (URL gambar)</label>
+        <input type="text" id="fIcon" placeholder="https://raw.githubusercontent.com/..."
+               oninput="previewIcon('fIcon', 'fIconPreview')"
+               style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+        <div style="margin-top: 8px;">
+          <img id="fIconPreview" src="" alt="preview"
+               style="width: 40px; height: 40px; object-fit: contain; display: none; border: 1px solid #ddd; border-radius: 4px; padding: 2px; background: #f9f9f9;"
+               onerror="this.style.display='none'">
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <div style="flex: 1;">
+          <label style="font-size: 13px; font-weight: 600;">ID (slug)</label>
+          <input type="text" id="fId" placeholder="darurat"
+                 style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+        </div>
+        <div style="flex: 1;">
+          <label style="font-size: 13px; font-weight: 600;">Urutan</label>
+          <input type="number" id="fUrutan" value="1"
+                 style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeModalKontak()">Batal</button>
+        <button class="btn-confirm" id="btnSimpanKontak" style="background: #4CAF50;">💾 Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { db } from "./js/firebase-config.js";
+    import { ref, get, set, remove, update } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { showToast, confirmDialog } from "./js/ui-helper.js";
+    import "./js/auth-guard.js";
+
+    let allKontak = [];
+    let currentEditId = null;
+
+    window.previewIcon = function(inputId, previewId) {
+      const val = document.getElementById(inputId).value.trim();
+      const img = document.getElementById(previewId);
+      if (!val) { img.style.display = "none"; return; }
+      if (val.startsWith("http")) {
+        img.src = val;
+        img.style.display = "block";
+      } else {
+        img.style.display = "none";
+      }
+    };
+
+    async function loadKontak() {
+      document.getElementById("loading").style.display = "block";
+      document.getElementById("emptyState").style.display = "none";
+      document.getElementById("containerKontak").innerHTML = "";
+
+      try {
+        const snap = await get(ref(db, "kontak_penting"));
+        const obj = snap.val() || {};
+        allKontak = Object.entries(obj).map(([id, val]) => ({ id, ...val }));
+        allKontak.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("totalCount").textContent = allKontak.length;
+        renderList();
+      } catch (e) {
+        console.error(e);
+        document.getElementById("loading").style.display = "none";
+        showToast("Gagal memuat: " + e.message, "error");
+      }
+    }
+
+    function renderList() {
+      const container = document.getElementById("containerKontak");
+      const empty = document.getElementById("emptyState");
+      container.innerHTML = "";
+
+      if (allKontak.length === 0) {
+        empty.style.display = "block";
+        return;
+      }
+
+      empty.style.display = "none";
+
+      allKontak.forEach(k => {
+        const div = document.createElement("div");
+        div.className = "kategori-item";
+        div.style.display = "flex";
+        div.style.alignItems = "center";
+        div.style.gap = "16px";
+
+        let iconHtml = "";
+        if (k.icon && k.icon.startsWith("http")) {
+          iconHtml = `<img src="${escapeHtml(k.icon)}"
+                          style="width:40px;height:40px;object-fit:contain;background:#E3F2FD;border-radius:8px;padding:4px;"
+                          onerror="this.src='https://via.placeholder.com/40?text=?'">`;
+        } else {
+          iconHtml = `<div style="width:40px;height:40px;background:#E3F2FD;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;">📞</div>`;
+        }
+
+        div.innerHTML = `
+          ${iconHtml}
+          <div style="flex:1;">
+            <strong style="font-size: 15px;">${escapeHtml(k.nama || '-')}</strong>
+            <br>
+            <span style="color: #1976D2; font-size: 13px; font-family: monospace;">${escapeHtml(k.nomor || '-')}</span>
+            <br>
+            <span class="badge">${escapeHtml(k.id)}</span>
+            <span class="badge">urutan: ${k.urutan || 0}</span>
+          </div>
+          <div>
+            <button class="btn-edit-kontak" data-id="${k.id}" title="Edit">✏️ Edit</button>
+            <button class="btn-danger" data-id="${k.id}" data-nama="${escapeHtml(k.nama)}" title="Hapus">🗑️ Hapus</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      container.querySelectorAll(".btn-edit-kontak").forEach(btn => {
+        btn.onclick = () => {
+          const id = btn.dataset.id;
+          const data = allKontak.find(k => k.id === id);
+          if (data) openModalKontak(true, data);
+        };
+      });
+
+      container.querySelectorAll(".btn-danger").forEach(btn => {
+        btn.onclick = async () => {
+          const id = btn.dataset.id;
+          const nama = btn.dataset.nama;
+          const ok = await confirmDialog(`Hapus kontak "<b>${nama}</b>"?`, "Konfirmasi Hapus");
+          if (!ok) return;
+          try {
+            await remove(ref(db, `kontak_penting/${id}`));
+            showToast(`"${nama}" dihapus`, "success");
+            loadKontak();
+          } catch (e) {
+            showToast("Gagal hapus: " + e.message, "error");
+          }
+        };
+      });
+    }
+
+    function openModalKontak(isEdit, data = null) {
+      document.getElementById("modalKontak").style.display = "flex";
+      document.getElementById("modalTitle").textContent = isEdit ? "Edit Kontak" : "Tambah Kontak";
+
+      if (isEdit && data) {
+        document.getElementById("fNama").value = data.nama || "";
+        document.getElementById("fNomor").value = data.nomor || "";
+        document.getElementById("fIcon").value = data.icon || "";
+        document.getElementById("fId").value = data.id || "";
+        document.getElementById("fUrutan").value = data.urutan || 1;
+        currentEditId = data.id;
+        previewIcon("fIcon", "fIconPreview");
+      } else {
+        document.getElementById("fNama").value = "";
+        document.getElementById("fNomor").value = "";
+        document.getElementById("fIcon").value = "";
+        document.getElementById("fId").value = "";
+        document.getElementById("fUrutan").value = (allKontak.length + 1);
+        document.getElementById("fIconPreview").style.display = "none";
+        currentEditId = null;
+      }
+    }
+
+    window.closeModalKontak = () => {
+      document.getElementById("modalKontak").style.display = "none";
+      currentEditId = null;
+    };
+
+    document.getElementById("btnSimpanKontak").onclick = async () => {
+      const nama = document.getElementById("fNama").value.trim();
+      const nomor = document.getElementById("fNomor").value.trim();
+      const icon = document.getElementById("fIcon").value.trim();
+      const idInput = document.getElementById("fId").value.trim().toLowerCase();
+      const urutan = parseInt(document.getElementById("fUrutan").value) || 0;
+
+      if (!nama || !nomor) {
+        showToast("Isi Nama dan Nomor/URL", "warning");
+        return;
+      }
+
+      const data = { nama, nomor, icon, urutan };
+
+      try {
+        if (currentEditId) {
+          await update(ref(db, `kontak_penting/${currentEditId}`), data);
+          showToast(`"${nama}" diperbarui`, "success");
+        } else {
+          let id = idInput;
+          if (!id) {
+            id = nama.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, "_");
+          }
+          if (!/^[a-z0-9_]+$/.test(id)) {
+            showToast("ID hanya huruf kecil, angka, underscore", "warning");
+            return;
+          }
+          await set(ref(db, `kontak_penting/${id}`), data);
+          showToast(`"${nama}" ditambahkan`, "success");
+        }
+        closeModalKontak();
+        loadKontak();
+      } catch (e) {
+        showToast("Gagal simpan: " + e.message, "error");
+      }
+    };
+
+    document.getElementById("btnSeed").onclick = async () => {
+      const ok = await confirmDialog(
+        "Ini akan menambahkan 3 kontak default (Darurat, Kantor Bupati, Website).<br><br>Lanjutkan?",
+        "Isi Data Awal"
+      );
+      if (!ok) return;
+
+      try {
+        await set(ref(db, "kontak_penting/darurat"), {
+          nama: "Darurat",
+          nomor: "112",
+          icon: "",
+          urutan: 1
+        });
+        await set(ref(db, "kontak_penting/kantor_bupati"), {
+          nama: "Kantor Bupati",
+          nomor: "0735-321123",
+          icon: "",
+          urutan: 2
+        });
+        await set(ref(db, "kontak_penting/website"), {
+          nama: "Situs Web",
+          nomor: "https://okuselatan.go.id",
+          icon: "",
+          urutan: 3
+        });
+        showToast("3 kontak default berhasil ditambahkan", "success");
+        loadKontak();
+      } catch (e) {
+        showToast("Gagal: " + e.message, "error");
+      }
+    };
+
+    document.getElementById("btnTambah").onclick = () => openModalKontak(false);
+    document.getElementById("btnRefresh").onclick = () => loadKontak();
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    loadKontak();
+  </script>
+</body>
+</html>

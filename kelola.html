@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kelola Kategori - SAKA BERJAYA</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Kelola Kategori & Indikator</h1>
+    <div class="user-info">
+      <a href="dashboard.html">← Dashboard</a>
+      <span id="userEmail">-</span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- TAB NAVIGASI -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="kategori">📂 Kategori</button>
+      <button class="tab-btn" data-tab="indikator">📊 Indikator</button>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- TAB: KATEGORI                                 -->
+    <!-- ============================================ -->
+    <section id="tab-kategori" class="tab-content active">
+      <h3>Daftar Kategori</h3>
+      <div id="listKategori" class="kategori-list">Memuat...</div>
+
+      <h3 style="margin-top: 32px;">➕ Tambah Kategori Baru</h3>
+      <div class="form-group">
+        <div>
+          <label>ID Kategori (huruf kecil, tanpa spasi)</label>
+          <input type="text" id="newKatId" placeholder="misal: pertanian">
+        </div>
+        <div>
+          <label>Nama Kategori</label>
+          <input type="text" id="newKatNama" placeholder="misal: Pertanian">
+        </div>
+        <div style="flex: 2;">
+          <label>Icon (URL gambar / nama drawable)</label>
+          <input type="text" id="newKatIcon"
+                 placeholder="https://raw.githubusercontent.com/.../icon.png"
+                 oninput="previewIcon('newKatIcon', 'newKatIconPreview')">
+          <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
+            <img id="newKatIconPreview" src="" alt="preview"
+                 style="width: 32px; height: 32px; object-fit: contain; display: none; border: 1px solid #ddd; border-radius: 4px; padding: 2px; background: #f9f9f9;"
+                 onerror="this.style.display='none'">
+            <small style="color: #757575; font-size: 11px;">
+              Bisa URL lengkap (https://...) atau nama drawable (ic_pertanian)
+            </small>
+          </div>
+        </div>
+        <button id="btnAddKategori">+ Tambah Kategori</button>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- TAB: INDIKATOR                                -->
+    <!-- ============================================ -->
+    <section id="tab-indikator" class="tab-content">
+      <div class="form-group">
+        <div>
+          <label>Pilih Kategori:</label>
+          <select id="selKategoriInd"></select>
+        </div>
+      </div>
+
+      <div id="loadingInd" class="loading" style="display:none;">Memuat indikator...</div>
+
+      <table id="tabelIndikator" style="display:none;">
+        <thead>
+          <tr>
+            <th style="width: 100px;">Kode</th>
+            <th>Nama Indikator</th>
+            <th style="width: 150px;">Satuan</th>
+            <th style="width: 100px;">Urutan</th>
+            <th style="width: 120px;">Aksi</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <h3 style="margin-top: 24px;">➕ Tambah Indikator Baru</h3>
+      <div class="form-group">
+        <div>
+          <label>Kode (misal: M6)</label>
+          <input type="text" id="newIndKode" placeholder="M6">
+        </div>
+        <div>
+          <label>Nama Indikator</label>
+          <input type="text" id="newIndNama" placeholder="Nama indikator baru">
+        </div>
+        <div>
+          <label>Satuan</label>
+          <input type="text" id="newIndSatuan" placeholder="misal: unit">
+        </div>
+        <button id="btnAddIndikator">+ Tambah Indikator</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================================ -->
+  <!-- MODAL: EDIT KATEGORI                          -->
+  <!-- ============================================ -->
+  <div id="modalEditKategori" class="modal-overlay" style="display: none;">
+    <div class="modal-box" style="max-width: 500px;">
+      <h3>✏️ Edit Kategori</h3>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">ID Kategori (tidak bisa diubah)</label>
+        <input type="text" id="editKatId" disabled
+               style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px; background: #f0f0f0; color: #757575;">
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; font-weight: 600;">Nama Kategori *</label>
+        <input type="text" id="editKatNama"
+               style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <div style="flex: 2;">
+          <label style="font-size: 13px; font-weight: 600;">Icon (URL / drawable)</label>
+          <input type="text" id="editKatIcon"
+                 placeholder="https://raw.githubusercontent.com/.../icon.png"
+                 oninput="previewIcon('editKatIcon', 'editKatIconPreview')"
+                 style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+          <div style="margin-top: 6px;">
+            <img id="editKatIconPreview" src="" alt="preview"
+                 style="width: 32px; height: 32px; object-fit: contain; display: none; border: 1px solid #ddd; border-radius: 4px; padding: 2px; background: #f9f9f9;"
+                 onerror="this.style.display='none'">
+          </div>
+        </div>
+        <div style="flex: 1;">
+          <label style="font-size: 13px; font-weight: 600;">Urutan</label>
+          <input type="number" id="editKatUrutan"
+                 style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px;">
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+          <input type="checkbox" id="editKatAktif">
+          <span>Aktif (tampil di aplikasi Android)</span>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeModalEditKategori()">Batal</button>
+        <button class="btn-confirm" id="btnSimpanEditKategori" style="background: #4CAF50;">💾 Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- SCRIPT                                        -->
+  <!-- ============================================ -->
+  <script type="module">
+    import { db } from "./js/firebase-config.js";
+    import { ref, get, set, remove, update } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { showToast, confirmDialog } from "./js/ui-helper.js";
+    import "./js/auth-guard.js";
+
+    const listKategori = document.getElementById("listKategori");
+    const selKategoriInd = document.getElementById("selKategoriInd");
+
+    let currentEditKatId = null;
+
+    // ================================
+    // PREVIEW ICON
+    // ================================
+    window.previewIcon = function(inputId, previewId) {
+      const val = document.getElementById(inputId).value.trim();
+      const img = document.getElementById(previewId);
+
+      if (!val) {
+        img.style.display = "none";
+        return;
+      }
+
+      // Kalau URL
+      if (val.startsWith("http://") || val.startsWith("https://")) {
+        img.src = val;
+        img.style.display = "block";
+      } else {
+        // Kalau nama drawable — tidak bisa preview, coba pakai placeholder dari emoji
+        img.style.display = "none";
+      }
+    };
+
+    // ================================
+    // TAB NAVIGASI
+    // ================================
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+      };
+    });
+
+    // ================================
+    // LOAD KATEGORI
+    // ================================
+    async function loadKategori() {
+      listKategori.innerHTML = "<p class='muted'>Memuat...</p>";
+
+      try {
+        const snap = await get(ref(db, "kategori"));
+        const obj = snap.val() || {};
+        const arr = Object.entries(obj).map(([id, val]) => ({ id, ...val }));
+        arr.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+
+        listKategori.innerHTML = "";
+
+        if (arr.length === 0) {
+          listKategori.innerHTML = "<p class='muted'>Belum ada kategori.</p>";
+          return;
+        }
+
+        arr.forEach(kat => {
+          const div = document.createElement("div");
+          div.className = "kategori-item";
+
+          // Preview icon di list
+          let iconHtml = "";
+          if (kat.icon && kat.icon.startsWith("http")) {
+            iconHtml = `<img src="${escapeHtml(kat.icon)}"
+                            style="width:28px;height:28px;object-fit:contain;border-radius:4px;background:#f9f9f9;padding:2px;margin-right:8px;vertical-align:middle;"
+                            onerror="this.style.display='none'">`;
+          }
+
+          div.innerHTML = `
+            <div style="display: flex; align-items: center;">
+              ${iconHtml}
+              <div>
+                <strong>${escapeHtml(kat.nama)}</strong>
+                <span class="badge">${escapeHtml(kat.id)}</span>
+                <span class="badge">urutan: ${kat.urutan || 0}</span>
+                <span class="badge ${kat.aktif !== false ? 'badge-success' : 'badge-danger'}">
+                  ${kat.aktif !== false ? 'aktif' : 'nonaktif'}
+                </span>
+              </div>
+            </div>
+            <div>
+              <button class="btn-edit-kat" data-id="${kat.id}" title="Edit">✏️ Edit</button>
+              <button class="btn-toggle" data-id="${kat.id}" data-aktif="${kat.aktif !== false}">
+                ${kat.aktif !== false ? '🚫 Nonaktifkan' : '✅ Aktifkan'}
+              </button>
+              <button class="btn-danger" data-id="${kat.id}" data-nama="${escapeHtml(kat.nama)}">
+                🗑️ Hapus
+              </button>
+            </div>
+          `;
+          listKategori.appendChild(div);
+        });
+
+        // Bind EDIT
+        listKategori.querySelectorAll(".btn-edit-kat").forEach(btn => {
+          btn.onclick = () => {
+            const id = btn.dataset.id;
+            const kat = arr.find(k => k.id === id);
+            if (kat) openModalEditKategori(kat);
+          };
+        });
+
+        // Bind TOGGLE
+        listKategori.querySelectorAll(".btn-toggle").forEach(btn => {
+          btn.onclick = async () => {
+            const id = btn.dataset.id;
+            const aktif = btn.dataset.aktif === "true";
+            await update(ref(db, `kategori/${id}`), { aktif: !aktif });
+            showToast(`Kategori ${aktif ? 'dinonaktifkan' : 'diaktifkan'}`, "success");
+            loadKategori();
+          };
+        });
+
+        // Bind HAPUS
+        listKategori.querySelectorAll(".btn-danger").forEach(btn => {
+          btn.onclick = async () => {
+            const id = btn.dataset.id;
+            const nama = btn.dataset.nama;
+            const ok = await confirmDialog(
+              `Yakin hapus kategori "<b>${nama}</b>"?<br><br>
+               Semua <b>indikator</b> dan <b>data</b> di dalam kategori ini juga akan dihapus.`,
+              "Hapus Kategori"
+            );
+            if (!ok) return;
+
+            try {
+              await remove(ref(db, `kategori/${id}`));
+              await remove(ref(db, `indikator/${id}`));
+              await remove(ref(db, `data/${id}`));
+              showToast(`Kategori "${nama}" dihapus`, "success");
+              loadKategori();
+            } catch (e) {
+              showToast("Gagal hapus: " + e.message, "error");
+            }
+          };
+        });
+
+        // Isi dropdown indikator
+        selKategoriInd.innerHTML = "";
+        arr.forEach(kat => {
+          const opt = document.createElement("option");
+          opt.value = kat.id;
+          opt.textContent = kat.nama;
+          selKategoriInd.appendChild(opt);
+        });
+
+        if (arr.length > 0) loadIndikator(arr[0].id);
+
+      } catch (e) {
+        console.error(e);
+        listKategori.innerHTML = "<p class='muted'>Gagal memuat: " + e.message + "</p>";
+      }
+    }
+
+    // ================================
+    // MODAL EDIT KATEGORI
+    // ================================
+    function openModalEditKategori(kat) {
+      currentEditKatId = kat.id;
+      document.getElementById("editKatId").value = kat.id;
+      document.getElementById("editKatNama").value = kat.nama || "";
+      document.getElementById("editKatIcon").value = kat.icon || "";
+      document.getElementById("editKatUrutan").value = kat.urutan || 0;
+      document.getElementById("editKatAktif").checked = kat.aktif !== false;
+      document.getElementById("modalEditKategori").style.display = "flex";
+
+      // Preview icon
+      previewIcon("editKatIcon", "editKatIconPreview");
+    }
+
+    window.closeModalEditKategori = () => {
+      document.getElementById("modalEditKategori").style.display = "none";
+      currentEditKatId = null;
+    };
+
+    document.getElementById("btnSimpanEditKategori").onclick = async () => {
+      if (!currentEditKatId) return;
+
+      const nama = document.getElementById("editKatNama").value.trim();
+      const icon = document.getElementById("editKatIcon").value.trim();
+      const urutan = parseInt(document.getElementById("editKatUrutan").value) || 0;
+      const aktif = document.getElementById("editKatAktif").checked;
+
+      if (!nama) {
+        showToast("Nama kategori tidak boleh kosong", "warning");
+        return;
+      }
+
+      try {
+        await update(ref(db, `kategori/${currentEditKatId}`), {
+          nama, icon, urutan, aktif
+        });
+        showToast(`Kategori "${nama}" diperbarui`, "success");
+        closeModalEditKategori();
+        loadKategori();
+      } catch (e) {
+        showToast("Gagal simpan: " + e.message, "error");
+      }
+    };
+
+    // ================================
+    // TAMBAH KATEGORI
+    // ================================
+    document.getElementById("btnAddKategori").onclick = async () => {
+      const id = document.getElementById("newKatId").value.trim().toLowerCase();
+      const nama = document.getElementById("newKatNama").value.trim();
+      const icon = document.getElementById("newKatIcon").value.trim();
+
+      if (!id || !nama) {
+        showToast("Isi ID dan Nama kategori", "warning");
+        return;
+      }
+      if (!/^[a-z0-9_]+$/.test(id)) {
+        showToast("ID hanya huruf kecil, angka, underscore", "warning");
+        return;
+      }
+
+      const check = await get(ref(db, `kategori/${id}`));
+      if (check.exists()) {
+        showToast("ID kategori sudah ada!", "error");
+        return;
+      }
+
+      const snap = await get(ref(db, "kategori"));
+      const obj = snap.val() || {};
+      let maxUrut = 0;
+      Object.values(obj).forEach(k => {
+        const u = k.urutan || 0;
+        if (u > maxUrut) maxUrut = u;
+      });
+
+      await set(ref(db, `kategori/${id}`), {
+        nama,
+        icon: icon || ("ic_" + id),
+        urutan: maxUrut + 1,
+        aktif: true
+      });
+
+      showToast(`Kategori "${nama}" ditambahkan`, "success");
+      document.getElementById("newKatId").value = "";
+      document.getElementById("newKatNama").value = "";
+      document.getElementById("newKatIcon").value = "";
+      document.getElementById("newKatIconPreview").style.display = "none";
+      loadKategori();
+    };
+
+    // ================================
+    // LOAD INDIKATOR
+    // ================================
+    async function loadIndikator(kategoriId) {
+      const tabel = document.getElementById("tabelIndikator");
+      const tbody = tabel.querySelector("tbody");
+      const loading = document.getElementById("loadingInd");
+
+      loading.style.display = "block";
+      tabel.style.display = "none";
+      tbody.innerHTML = "";
+
+      try {
+        const snap = await get(ref(db, `indikator/${kategoriId}`));
+        const obj = snap.val() || {};
+        const inds = Object.entries(obj).map(([id, val]) => ({ id, ...val }));
+        inds.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+
+        if (inds.length === 0) {
+          loading.style.display = "none";
+          tabel.style.display = "table";
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;" class="muted">Belum ada indikator.</td></tr>`;
+          return;
+        }
+
+        inds.forEach(ind => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><input type="text" value="${escapeHtml(ind.kode)}" data-field="kode"></td>
+            <td><input type="text" value="${escapeHtml(ind.nama)}" data-field="nama"></td>
+            <td><input type="text" value="${escapeHtml(ind.satuan || '')}" data-field="satuan"></td>
+            <td><input type="number" value="${ind.urutan || 0}" data-field="urutan"></td>
+            <td>
+              <button class="btn-save" data-id="${ind.id}" title="Simpan">💾</button>
+              <button class="btn-danger btn-del" data-id="${ind.id}" data-nama="${escapeHtml(ind.nama)}" title="Hapus">🗑️</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll(".btn-save").forEach(btn => {
+          btn.onclick = async () => {
+            const id = btn.dataset.id;
+            const tr = btn.closest("tr");
+            const data = {
+              kode: tr.querySelector("[data-field='kode']").value.trim(),
+              nama: tr.querySelector("[data-field='nama']").value.trim(),
+              satuan: tr.querySelector("[data-field='satuan']").value.trim(),
+              urutan: parseInt(tr.querySelector("[data-field='urutan']").value) || 0
+            };
+            if (!data.kode || !data.nama) {
+              showToast("Kode & Nama tidak boleh kosong", "warning");
+              return;
+            }
+            await update(ref(db, `indikator/${kategoriId}/${id}`), data);
+            btn.textContent = "✅";
+            showToast("Indikator diperbarui", "success");
+            setTimeout(() => btn.textContent = "💾", 1200);
+          };
+        });
+
+        tbody.querySelectorAll(".btn-del").forEach(btn => {
+          btn.onclick = async () => {
+            const id = btn.dataset.id;
+            const nama = btn.dataset.nama;
+            const ok = await confirmDialog(`Hapus indikator "<b>${nama}</b>"?`, "Hapus Indikator");
+            if (!ok) return;
+            await remove(ref(db, `indikator/${kategoriId}/${id}`));
+            showToast(`"${nama}" dihapus`, "success");
+            loadIndikator(kategoriId);
+          };
+        });
+
+        loading.style.display = "none";
+        tabel.style.display = "table";
+
+      } catch (e) {
+        loading.style.display = "none";
+        showToast("Gagal memuat: " + e.message, "error");
+      }
+    }
+
+    selKategoriInd.onchange = () => loadIndikator(selKategoriInd.value);
+
+    // ================================
+    // TAMBAH INDIKATOR
+    // ================================
+    document.getElementById("btnAddIndikator").onclick = async () => {
+      const kategori = selKategoriInd.value;
+      const kode = document.getElementById("newIndKode").value.trim().toUpperCase();
+      const nama = document.getElementById("newIndNama").value.trim();
+      const satuan = document.getElementById("newIndSatuan").value.trim();
+
+      if (!kategori) { showToast("Pilih kategori dulu", "warning"); return; }
+      if (!kode || !nama) { showToast("Isi kode dan nama", "warning"); return; }
+
+      const check = await get(ref(db, `indikator/${kategori}/${kode}`));
+      if (check.exists()) { showToast("Kode sudah ada!", "error"); return; }
+
+      const snap = await get(ref(db, `indikator/${kategori}`));
+      const obj = snap.val() || {};
+      let maxUrut = 0;
+      Object.values(obj).forEach(v => {
+        const u = v.urutan || 0;
+        if (u > maxUrut) maxUrut = u;
+      });
+
+      await set(ref(db, `indikator/${kategori}/${kode}`), {
+        kode, nama, satuan, urutan: maxUrut + 1
+      });
+
+      showToast(`Indikator "${nama}" ditambahkan`, "success");
+      document.getElementById("newIndKode").value = "";
+      document.getElementById("newIndNama").value = "";
+      document.getElementById("newIndSatuan").value = "";
+      loadIndikator(kategori);
+    };
+
+    // ================================
+    // HELPER
+    // ================================
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    loadKategori();
+  </script>
+</body>
+</html>

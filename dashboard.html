@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - SAKA BERJAYA</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>SAKA BERJAYA</h1>
+    <div class="user-info">
+      <span id="userEmail">-</span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <h2>Dashboard Admin</h2>
+    <p class="muted">Selamat datang di panel admin entri data statistik.</p>
+
+    <!-- ============================================ -->
+    <!-- STATISTIK RINGKAS                             -->
+    <!-- ============================================ -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon">📂</div>
+        <div>
+          <div class="stat-value" id="statKategori">-</div>
+          <div class="stat-label">Kategori Aktif</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">📊</div>
+        <div>
+          <div class="stat-value" id="statIndikator">-</div>
+          <div class="stat-label">Total Indikator</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">💾</div>
+        <div>
+          <div class="stat-value" id="statData">-</div>
+          <div class="stat-label">Entri Tersimpan</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">📅</div>
+        <div>
+          <div class="stat-value" id="statTahun">-</div>
+          <div class="stat-label">Tahun Data</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">🏞️</div>
+        <div>
+          <div class="stat-value" id="statWisata">-</div>
+          <div class="stat-label">Objek Wisata</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">🔗</div>
+        <div>
+          <div class="stat-value" id="statMenu">-</div>
+          <div class="stat-label">Menu Lainnya</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">👤</div>
+        <div>
+          <div class="stat-value" id="statPejabat">-</div>
+          <div class="stat-label">Pejabat Terdaftar</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon">📞</div>
+        <div>
+          <div class="stat-value" id="statKontak">-</div>
+          <div class="stat-label">Kontak Penting</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- MENU CEPAT                                    -->
+    <!-- ============================================ -->
+    <h3 style="margin-top: 32px;">Menu Cepat</h3>
+    <div class="cards">
+      <a href="entri.html" class="card">
+        <h3>📝 Entri Data</h3>
+        <p>Isi data statistik per kategori & tahun</p>
+      </a>
+
+      <a href="kelola.html" class="card">
+        <h3>⚙️ Kelola Kategori</h3>
+        <p>Tambah/edit/hapus kategori & indikator</p>
+      </a>
+
+      <a href="lihat.html" class="card">
+        <h3>👁️ Lihat Data</h3>
+        <p>Preview & export data ke CSV</p>
+      </a>
+
+      <a href="pariwisata.html" class="card">
+        <h3>🏞️ Kelola Pariwisata</h3>
+        <p>CRUD objek wisata + Upload Excel</p>
+      </a>
+
+      <a href="menu_lainnya.html" class="card">
+        <h3>🔗 Kelola Menu Lainnya</h3>
+        <p>Kelola link DTSEN, Portal, BPS, dll</p>
+      </a>
+
+      <a href="pejabat.html" class="card">
+        <h3>👤 Kelola Pejabat</h3>
+        <p>Kelola foto & nama Bupati/Wakil Bupati</p>
+      </a>
+
+      <a href="kontak_penting.html" class="card">
+        <h3>📞 Kelola Kontak Penting</h3>
+        <p>Kelola nomor darurat, alamat, website</p>
+      </a>
+
+      <!-- MENU BARU: KIRIM NOTIFIKASI -->
+      <a href="kirim_notifikasi.html" class="card">
+        <h3>🔔 Kirim Notifikasi</h3>
+        <p>Kirim push notification ke semua pengguna</p>
+      </a>
+    </div>
+  </main>
+
+  <!-- ============================================ -->
+  <!-- SCRIPT                                        -->
+  <!-- ============================================ -->
+  <script type="module">
+    import { db } from "./js/firebase-config.js";
+    import { ref, get } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { showToast } from "./js/ui-helper.js";
+    import "./js/auth-guard.js";
+
+    async function loadStats() {
+      try {
+        const [
+          katSnap, indSnap, dataSnap, 
+          wisataSnap, menuSnap, pejabatSnap, kontakSnap
+        ] = await Promise.all([
+          get(ref(db, "kategori")),
+          get(ref(db, "indikator")),
+          get(ref(db, "data")),
+          get(ref(db, "pariwisata")),
+          get(ref(db, "menu_lainnya")),
+          get(ref(db, "pejabat")),
+          get(ref(db, "kontak_penting"))
+        ]);
+
+        // 1. Kategori aktif
+        const katObj = katSnap.val() || {};
+        let katAktif = 0;
+        Object.values(katObj).forEach(k => {
+          if (k.aktif !== false) katAktif++;
+        });
+
+        // 2. Total indikator
+        const indObj = indSnap.val() || {};
+        let totalInd = 0;
+        Object.values(indObj).forEach(katIndikator => {
+          totalInd += Object.keys(katIndikator).length;
+        });
+
+        // 3. Entri & tahun
+        const dataObj = dataSnap.val() || {};
+        let totalData = 0;
+        const tahunSet = new Set();
+        Object.values(dataObj).forEach(katData => {
+          Object.entries(katData).forEach(([tahun, indikatorData]) => {
+            tahunSet.add(tahun);
+            totalData += Object.keys(indikatorData).length;
+          });
+        });
+
+        // 4. Wisata
+        const wisataObj = wisataSnap.val() || {};
+        const totalWisata = Object.keys(wisataObj).length;
+
+        // 5. Menu lainnya
+        const menuObj = menuSnap.val() || {};
+        const totalMenu = Object.keys(menuObj).length;
+
+        // 6. Pejabat
+        const pejabatObj = pejabatSnap.val() || {};
+        const totalPejabat = Object.keys(pejabatObj).length;
+
+        // 7. Kontak penting
+        const kontakObj = kontakSnap.val() || {};
+        const totalKontak = Object.keys(kontakObj).length;
+
+        // Update UI
+        document.getElementById("statKategori").textContent = katAktif;
+        document.getElementById("statIndikator").textContent = totalInd;
+        document.getElementById("statData").textContent = totalData;
+        document.getElementById("statTahun").textContent = tahunSet.size;
+        document.getElementById("statWisata").textContent = totalWisata;
+        document.getElementById("statMenu").textContent = totalMenu;
+        document.getElementById("statPejabat").textContent = totalPejabat;
+        document.getElementById("statKontak").textContent = totalKontak;
+
+      } catch (e) {
+        console.error("Statistik error:", e);
+        showToast("Gagal memuat statistik: " + e.message, "error");
+      }
+    }
+
+    loadStats();
+  </script>
+</body>
+</html>

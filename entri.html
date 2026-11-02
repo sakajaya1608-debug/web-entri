@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entri Data - SAKA BERJAYA</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Entri Data</h1>
+    <div class="user-info">
+      <a href="dashboard.html">← Dashboard</a>
+      <span id="userEmail">-</span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="form-group">
+      <div>
+        <label>Kategori:</label>
+        <select id="kategori"></select>
+      </div>
+      <div>
+        <label>Tahun:</label>
+        <select id="tahun"></select>
+      </div>
+      <button id="btnLoad">🔄 Muat Data</button>
+      <button id="btnKosongkan" class="btn-secondary">🧹 Reset Form</button>
+    </div>
+
+    <div id="statusInfo" class="status-info" style="display:none;"></div>
+    <div id="loading" class="loading" style="display:none;">Memuat data...</div>
+
+    <table id="tabelEntri" style="display:none;">
+      <thead>
+        <tr>
+          <th style="width: 80px;">Kode</th>
+          <th>Indikator</th>
+          <th style="width: 100px;">Satuan</th>
+          <th style="width: 130px;">Nilai</th>
+          <th style="width: 130px;">Delta (+/-)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div id="aksi" style="display:none;" class="aksi-bar">
+      <span id="infoJumlah" class="muted"></span>
+      <button id="btnSimpan" class="btn-primary">💾 Simpan Semua</button>
+    </div>
+  </main>
+
+  <script type="module">
+    import { db, auth } from "./js/firebase-config.js";
+    import { ref, get, update } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+    import { showToast } from "./js/ui-helper.js";
+    import "./js/auth-guard.js";
+
+    const selKategori = document.getElementById("kategori");
+    const selTahun = document.getElementById("tahun");
+    const tabel = document.getElementById("tabelEntri");
+    const tbody = tabel.querySelector("tbody");
+    const loading = document.getElementById("loading");
+    const aksi = document.getElementById("aksi");
+    const statusInfo = document.getElementById("statusInfo");
+
+    // ================================
+    // LOAD KATEGORI
+    // ================================
+    try {
+      const katSnap = await get(ref(db, "kategori"));
+      const katObj = katSnap.val() || {};
+      const katArr = Object.entries(katObj).map(([id, val]) => ({ id, ...val }));
+      katArr.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+
+      katArr.forEach(kat => {
+        if (kat.aktif !== false) {
+          const opt = document.createElement("option");
+          opt.value = kat.id;
+          opt.textContent = kat.nama;
+          selKategori.appendChild(opt);
+        }
+      });
+    } catch (e) {
+      console.error(e);
+      showToast("Gagal memuat kategori: " + e.message, "error");
+    }
+
+    // ================================
+    // LOAD TAHUN
+    // ================================
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear + 1; y >= currentYear - 5; y--) {
+      const opt = document.createElement("option");
+      opt.value = y;
+      opt.textContent = y;
+      if (y === currentYear) opt.selected = true;
+      selTahun.appendChild(opt);
+    }
+
+    // ================================
+    // MUAT DATA
+    // ================================
+    document.getElementById("btnLoad").onclick = async () => {
+      const kategori = selKategori.value;
+      const tahun = parseInt(selTahun.value);
+      const tahunLalu = tahun - 1;
+
+      if (!kategori) {
+        showToast("Pilih kategori dulu", "warning");
+        return;
+      }
+
+      loading.style.display = "block";
+      tabel.style.display = "none";
+      aksi.style.display = "none";
+      statusInfo.style.display = "none";
+      tbody.innerHTML = "";
+
+      try {
+        // Ambil data indikator, data tahun ini, data tahun lalu — sekaligus
+        const [indSnap, dataNowSnap, dataPrevSnap] = await Promise.all([
+          get(ref(db, `indikator/${kategori}`)),
+          get(ref(db, `data/${kategori}/${tahun}`)),
+          get(ref(db, `data/${kategori}/${tahunLalu}`))
+        ]);
+
+        const indObj = indSnap.val() || {};
+        const indikators = Object.entries(indObj).map(([id, val]) => ({ id, ...val }));
+        indikators.sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+
+        if (indikators.length === 0) {
+          loading.style.display = "none";
+          statusInfo.className = "status-info status-warning";
+          statusInfo.innerHTML = "⚠️ Belum ada indikator untuk kategori ini.";
+          statusInfo.style.display = "block";
+          return;
+        }
+
+        const dataNowObj = dataNowSnap.val() || {};
+        const dataPrevObj = dataPrevSnap.val() || {};
+        const hasPrevYear = Object.keys(dataPrevObj).length > 0;
+
+        let terisiCount = 0;
+
+        indikators.forEach(ind => {
+          const hasNow = dataNowObj[ind.id] !== undefined;
+          const hasPrev = dataPrevObj[ind.id] !== undefined;
+          if (hasNow) terisiCount++;
+
+          // Nilai saat ini & tahun lalu
+          const nilaiNow = hasNow ? (dataNowObj[ind.id].nilai ?? 0) : 0;
+          const nilaiPrev = hasPrev ? (dataPrevObj[ind.id].nilai ?? 0) : 0;
+
+          // Delta otomatis
+          let delta = 0;
+          if (hasPrev && hasNow) {
+            delta = nilaiNow - nilaiPrev;
+          }
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${ind.kode}</td>
+            <td>${ind.nama}</td>
+            <td>${ind.satuan}</td>
+            <td>
+              <input type="number" step="any"
+                     data-kode="${ind.id}"
+                     data-field="nilai"
+                     data-prev="${nilaiPrev}"
+                     value="${nilaiNow}"
+                     class="input-nilai">
+            </td>
+            <td>
+              <input type="number" step="any"
+                     data-kode="${ind.id}"
+                     data-field="delta"
+                     value="${delta}"
+                     class="input-delta"
+                     readonly
+                     style="background:#f0f0f0;cursor:not-allowed;">
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        // Pasang listener otomatis hitung delta saat nilai diubah
+        tbody.querySelectorAll(".input-nilai").forEach(input => {
+          input.addEventListener("input", (e) => {
+            const tr = e.target.closest("tr");
+            const nilaiBaru = parseFloat(e.target.value) || 0;
+            const nilaiPrev = parseFloat(e.target.dataset.prev) || 0;
+
+            const deltaInput = tr.querySelector(".input-delta");
+            let deltaBaru = 0;
+            // Hitung delta hanya jika ada data tahun lalu
+            if (nilaiPrev !== 0 || e.target.dataset.prev !== "0") {
+              const prevValue = parseFloat(e.target.dataset.prev);
+              if (!isNaN(prevValue)) {
+                deltaBaru = nilaiBaru - prevValue;
+              }
+            }
+            deltaInput.value = deltaBaru;
+          });
+        });
+
+        loading.style.display = "none";
+        tabel.style.display = "table";
+        aksi.style.display = "flex";
+        document.getElementById("infoJumlah").textContent =
+          `${indikators.length} indikator — ${terisiCount} sudah terisi` +
+          (hasPrevYear ? ` — delta dihitung dari tahun ${tahunLalu}` : ` — delta 0 (tahun ${tahunLalu} tidak ada)`);
+
+        statusInfo.className = "status-info status-success";
+        statusInfo.textContent = `✅ Menampilkan data ${selKategori.options[selKategori.selectedIndex].text} tahun ${tahun}`;
+        statusInfo.style.display = "block";
+
+      } catch (e) {
+        loading.style.display = "none";
+        console.error(e);
+        showToast("Gagal memuat: " + e.message, "error");
+      }
+    };
+
+    // ================================
+    // SIMPAN
+    // ================================
+    document.getElementById("btnSimpan").onclick = async () => {
+      const kategori = selKategori.value;
+      const tahun = selTahun.value;
+      const rows = tbody.querySelectorAll("tr");
+
+      if (rows.length === 0) {
+        showToast("Tidak ada data untuk disimpan", "warning");
+        return;
+      }
+
+      const updates = {};
+      rows.forEach(tr => {
+        const kode = tr.querySelector("input[data-field='nilai']").dataset.kode;
+        const nilai = parseFloat(tr.querySelector("input[data-field='nilai']").value) || 0;
+        const delta = parseFloat(tr.querySelector("input[data-field='delta']").value) || 0;
+
+        updates[`data/${kategori}/${tahun}/${kode}`] = {
+          nilai,
+          delta,
+          updatedAt: Date.now(),
+          updatedBy: auth.currentUser.uid
+        };
+      });
+
+      try {
+        await update(ref(db), updates);
+        showToast(`✅ ${rows.length} data berhasil disimpan!`, "success");
+        statusInfo.innerHTML = `✅ Data tersimpan pada ${new Date().toLocaleString('id-ID')}`;
+      } catch (e) {
+        showToast("❌ Gagal menyimpan: " + e.message, "error");
+      }
+    };
+
+    // ================================
+    // RESET
+    // ================================
+    document.getElementById("btnKosongkan").onclick = () => {
+      tbody.querySelectorAll(".input-nilai").forEach(inp => {
+        inp.value = 0;
+        // Trigger hitung ulang delta
+        inp.dispatchEvent(new Event("input"));
+      });
+      showToast("Form direset", "info");
+    };
+
+    selKategori.onchange = () => document.getElementById("btnLoad").click();
+    selTahun.onchange = () => document.getElementById("btnLoad").click();
+
+    // Load pertama kali
+    document.getElementById("btnLoad").click();
+  </script>
+</body>
+</html>
